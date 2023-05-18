@@ -54,7 +54,7 @@ def _build_circular_hatch(
 
 def _build_diagonal_hatch(delta: float, offset: float, w: int, h: int, angle: float = 45):
     # Keep angle between 0 and 180
-    angle = angle % 180
+    angle %= 180
     # Convert angle to rads
     angle_rad = angle * math.pi / 180
 
@@ -66,7 +66,6 @@ def _build_diagonal_hatch(delta: float, offset: float, w: int, h: int, angle: fl
             stop = (i, h)
             lines.append([start, stop])
 
-    # Draw horizontal lines
     elif angle == 0:
         for j in np.arange(offset, h + 1, delta):
             start = (0, j)
@@ -77,32 +76,16 @@ def _build_diagonal_hatch(delta: float, offset: float, w: int, h: int, angle: fl
         for i in np.arange(offset, h / math.tan(angle_rad) + w + 1, delta):
             j = abs(i * math.tan(angle_rad))
 
-            if i <= w:
-                start = (i, 0)
-            else:
-                start = (w, (i - w) * j / i)
-
-            if j <= h:
-                stop = (0, j)
-            else:
-                stop = ((j - h) * i / j, h)
-
+            start = (i, 0) if i <= w else (w, (i - w) * j / i)
+            stop = (0, j) if j <= h else ((j - h) * i / j, h)
             lines.append([start, stop])
 
     else:
         for i in np.arange(h / math.tan(angle_rad) + offset, w + 1, delta):
             j = abs((w - i) * math.tan(math.pi - angle_rad))
 
-            if i >= 0:
-                start = (i, 0)
-            else:
-                start = (0, -i * j / (w - i))
-
-            if j >= h:
-                stop = (w - (j - h) * (w - i) / j, h)
-            else:
-                stop = (w, j)
-
+            start = (i, 0) if i >= 0 else (0, -i * j / (w - i))
+            stop = (w - (j - h) * (w - i) / j, h) if j >= h else (w, j)
             lines.append([start, stop])
     return lines
 
@@ -128,11 +111,10 @@ def _build_mask(cnt):
     for r in lr:
         if mask is None:
             mask = Polygon(r)
+        elif r.is_ccw:
+            mask = mask.union(Polygon(r).buffer(0.5))
         else:
-            if r.is_ccw:
-                mask = mask.union(Polygon(r).buffer(0.5))
-            else:
-                mask = mask.difference(Polygon(r).buffer(-0.5))
+            mask = mask.difference(Polygon(r).buffer(-0.5))
 
     return mask
 
@@ -214,11 +196,11 @@ def _build_hatch(
         mask = [_build_mask(i) for i in contours[::-1]]
 
         # Spacing considers interleaved lines from different levels
-        delta_factors = [2 ** (n_levels - 1)]
-        delta_factors.extend([2 ** (n_levels - i) for i in range(1, n_levels)])
-        offset_factors = [0]
-        offset_factors.extend([2 ** (n_levels - i - 1) for i in range(1, n_levels)])
-
+        delta_factors = [
+            2 ** (n_levels - 1),
+            *[2 ** (n_levels - i) for i in range(1, n_levels)],
+        ]
+        offset_factors = [0, *[2 ** (n_levels - i - 1) for i in range(1, n_levels)]]
         if circular:
             lines = [
                 _build_circular_hatch(
@@ -254,7 +236,7 @@ def _build_hatch(
         ]
 
         mls = [
-            MultiLineString(shapely.ops.linemerge([i for i in mls_[j].geoms]))
+            MultiLineString(shapely.ops.linemerge(list(mls_[j].geoms)))
             for j in range(n_levels)
         ]
 
@@ -263,7 +245,7 @@ def _build_hatch(
 
     all_lines = []
     for i in range(n_levels):
-        all_lines.extend([ls for ls in mls[i].geoms])
+        all_lines.extend(list(mls[i].geoms))
 
     return (MultiLineString(all_lines), *contours)
 
@@ -330,7 +312,10 @@ def hatch(
     if save_svg:
         # save vector data to svg file
         _save_to_svg(
-            os.path.splitext(file_path)[0] + ".svg", img.shape[0], img.shape[1], [mls]
+            f"{os.path.splitext(file_path)[0]}.svg",
+            img.shape[0],
+            img.shape[1],
+            [mls],
         )
 
     # Plot everything
