@@ -101,10 +101,7 @@ def hatched_gen(
 
     state.document.add_to_sources(filename)
 
-    interp = cv2.INTER_LINEAR
-    if interpolation == "nearest":
-        interp = cv2.INTER_NEAREST
-
+    interp = cv2.INTER_NEAREST if interpolation == "nearest" else cv2.INTER_LINEAR
     return vp.LineCollection(
         hatched.hatch(
             file_path=filename,
